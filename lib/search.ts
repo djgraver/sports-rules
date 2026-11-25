@@ -19,6 +19,14 @@ export function loadSport(sport: SportId, dir = path.join(process.cwd(), "data",
     return null;
   }
   const data: SportIndexFile = JSON.parse(readFileSync(file, "utf8"));
+  // Guard against duplicate ids from older ingests: keep every chunk, renaming repeats.
+  const ids = new Set<string>();
+  data.chunks = data.chunks.map((c) => {
+    let id = c.id;
+    for (let n = 2; ids.has(id); n++) id = `${c.id}~${n}`;
+    ids.add(id);
+    return id === c.id ? c : { ...c, id };
+  });
   const index = new MiniSearch<RuleChunk>({
     fields: ["ref", "title", "section", "text"],
     storeFields: [],
