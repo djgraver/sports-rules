@@ -1,102 +1,177 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import { makeClient, planSearches, streamAnswer } from "@/lib/answer.ts";
+import { buildIndex, searchRules, type LoadedSport } from "@/lib/search.ts";
+import { getSport } from "@/lib/sources.ts";
+import type { RuleChunk, SportIndexFile } from "@/lib/types.ts";
 
-interface SportOption {
+export interface SportOption {
   id: string;
   name: string;
   governingBodies: string;
   loaded: boolean;
-  documents: string[];
-  officialPages: { name: string; url: string }[];
-}
-
-interface Source {
-  ref: string;
-  title: string;
-  section: string;
-  source: string;
-  page: number;
-  url?: string;
-  text: string;
+  documents: { name: string; kind: string }[];
 }
 
 const EXAMPLES: Record<string, string> = {
-  soccer: "Our keeper picked up the ball after a defender headed it back to him. Is that a free kick?",
+  "inline-hockey": "A defender closed his hand on the puck and dropped it to his own stick. Is that a penalty?",
   "ice-hockey": "A player's stick broke and he kept playing with the shaft. What's the call?",
-  "inline-hockey": "Can a player play the puck with a stick that's above shoulder height?",
+  soccer: "Our keeper picked up the ball after a defender headed it back to him. Is that a free kick?",
   cricket: "The ball hit the helmet lying behind the keeper. What happens?",
+  netball: "The goal attack caught a rebound with one foot over the circle line. Can she shoot?",
+  basketball: "A player caught the ball, landed on one foot, then jumped off it and landed on both. Travel?",
+  afl: "A player marked the ball but it touched an opponent's fingertips first. Is it still a mark?",
 };
 
-export default function Ask({ sports }: { sports: SportOption[] }) {
-  const [sport, setSport] = useState(sports.find((s) => s.loaded)?.id ?? sports[0].id);
+const KEY_STORAGE = "rulesref.anthropicKey";
+const DEFAULT_STORAGE = "rulesref.defaultSport";
+
+function store(key: string, value?: string): string {
+  try {
+    if (value === undefined) return localStorage.getItem(key) ?? "";
+    if (value) localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
+  } catch {
+    // Private browsing or storage blocked: settings just won't persist.
+  }
+  return value ?? "";
+}
+
+export default function Ask({ sports, defaultSport, basePath }: { sports: SportOption[]; defaultSport: string; basePath: string }) {
+  const firstLoaded = sports.find((s) => s.loaded)?.id ?? sports[0].id;
+  const [sport, setSport] = useState(sports.find((s) => s.id === defaultSport && s.loaded) ? defaultSport : firstLoaded);
+  const [myDefault, setMyDefault] = useState(defaultSport);
+  const [apiKey, setApiKey] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
-  const [sources, setSources] = useState<Source[]>([]);
+  const [sources, setSources] = useState<RuleChunk[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const abort = useRef<AbortController | null>(null);
+  const indexes = useRef(new Map<string, LoadedSport>());
   const current = sports.find((s) => s.id === sport)!;
+
+  // Restore this browser's settings.
+  useEffect(() => {
+    setApiKey(store(KEY_STORAGE));
+    const saved = store(DEFAULT_STORAGE);
+    if (saved && sports.some((s) => s.id === saved && s.loaded)) {
+      setMyDefault(saved);
+      setSport(saved);
+    }
+  }, [sports]);
+
+  async function loadIndex(id: string): Promise<LoadedSport> {
+    const cached = indexes.current.get(id);
+    if (cached) return cached;
+    const res = await fetch(`${basePath}/rules/${id}.json`);
+    if (!res.ok) throw new Error("Couldn't load that rulebook.");
+    const loaded = buildIndex((await res.json()) as SportIndexFile);
+    indexes.current.set(id, loaded);
+    return loaded;
+  }
 
   async function ask(e: React.FormEvent) {
     e.preventDefault();
-    if (!question.trim() || busy) return;
-    abort.current?.abort();
-    abort.current = new AbortController();
+    const q = question.trim();
+    const info = getSport(sport);
+    if (!q || busy || !info) return;
     setBusy(true);
     setAnswer("");
     setSources([]);
     setError("");
     try {
-      const res = await fetch("/api/ask", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sport, question }),
-        signal: abort.current.signal,
-      });
-      if (!res.ok || !res.body) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || `Request failed (${res.status})`);
+      const loaded = await loadIndex(sport);
+      if (!apiKey) {
+        // No key: plain keyword search over the rulebook.
+        setSources(searchRules(loaded, [q], 8));
+        return;
       }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let gotHeader = false;
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        if (!gotHeader) {
-          const nl = buffer.indexOf("\n");
-          if (nl === -1) continue;
-          const header = JSON.parse(buffer.slice(0, nl));
-          setSources(header.sources ?? []);
-          buffer = buffer.slice(nl + 1);
-          gotHeader = true;
-        }
-        setAnswer(buffer);
+      const client = makeClient(apiKey);
+      const searches = await planSearches(client, info, q);
+      const chunks = searchRules(loaded, searches, 12);
+      setSources(chunks);
+      let text = "";
+      for await (const part of streamAnswer(client, info, q, chunks)) {
+        text += part;
+        setAnswer(text);
       }
     } catch (err) {
-      if ((err as Error).name !== "AbortError") setError((err as Error).message);
+      const status = (err as { status?: number }).status;
+      setError(
+        status === 401
+          ? "That API key wasn't accepted. Check it in Settings."
+          : status === 429
+            ? "Too many questions right now. Try again in a minute."
+            : (err as Error).message || "Something went wrong.",
+      );
     } finally {
       setBusy(false);
     }
   }
 
+  const pdfUrl = (c: RuleChunk) => {
+    const doc = indexes.current.get(c.sport)?.file.documents.find((d) => d.source === c.source);
+    return doc ? `${doc.url}#page=${c.page}` : undefined;
+  };
+
   return (
     <section>
       <form onSubmit={ask} className="card">
-        <label htmlFor="sport">Sport</label>
+        <div className="row">
+          <label htmlFor="sport">Sport</label>
+          <button type="button" className="link" onClick={() => setShowSettings((v) => !v)}>
+            {showSettings ? "Close settings" : "Settings"}
+          </button>
+        </div>
         <select id="sport" value={sport} onChange={(e) => setSport(e.target.value)}>
           {sports.map((s) => (
             <option key={s.id} value={s.id} disabled={!s.loaded}>
               {s.name}
-              {s.loaded ? "" : " (rules not loaded yet)"}
+              {s.loaded ? "" : " (coming soon)"}
             </option>
           ))}
         </select>
-        <p className="muted">{current.governingBodies}</p>
+        <p className="muted">
+          {current.governingBodies}
+          {sport !== myDefault && (
+            <>
+              {" · "}
+              <button
+                type="button"
+                className="link"
+                onClick={() => {
+                  store(DEFAULT_STORAGE, sport);
+                  setMyDefault(sport);
+                }}
+              >
+                Make this my default
+              </button>
+            </>
+          )}
+        </p>
+
+        {showSettings && (
+          <div className="settings">
+            <label htmlFor="key">Anthropic API key</label>
+            <input
+              id="key"
+              type="password"
+              autoComplete="off"
+              placeholder="sk-ant-…"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value.trim())}
+              onBlur={() => store(KEY_STORAGE, apiKey)}
+            />
+            <p className="muted">
+              Stored only in this browser and sent only to Anthropic. Without a key you can still search the rulebooks;
+              with one you get plain-language answers.
+            </p>
+          </div>
+        )}
+
         <label htmlFor="q">What happened?</label>
         <textarea
           id="q"
@@ -109,7 +184,7 @@ export default function Ask({ sports }: { sports: SportOption[] }) {
           }}
         />
         <button type="submit" disabled={busy || !question.trim() || !current.loaded}>
-          {busy ? "Checking the rulebook…" : "Ask"}
+          {busy ? "Checking the rulebook…" : apiKey ? "Ask" : "Search the rules"}
         </button>
       </form>
 
@@ -121,27 +196,32 @@ export default function Ask({ sports }: { sports: SportOption[] }) {
         </article>
       )}
 
+      {!apiKey && sources.length > 0 && !busy && (
+        <p className="muted">Showing matching rules. Add an API key in Settings to get a plain-language answer.</p>
+      )}
+
       {sources.length > 0 && (
-        <details className="card">
+        <details className="card" open={!apiKey}>
           <summary>Rules consulted ({sources.length})</summary>
           <ol className="sources">
-            {sources.map((s, i) => (
-              <li key={i}>
+            {sources.map((s) => (
+              <li key={s.id}>
                 <strong>{s.ref || s.title}</strong>
                 {s.ref && s.title ? ` ${s.title}` : ""}
-                {s.section ? ` · ${s.section}` : ""}
+                {s.section && s.section !== s.title ? ` · ${s.section}` : ""}
+                {s.kind === "casebook" && <span className="tag">official ruling</span>}
                 <div className="muted">
                   {s.source}, page {s.page}
-                  {s.url && (
+                  {pdfUrl(s) && (
                     <>
                       {" · "}
-                      <a href={`${s.url}#page=${s.page}`} target="_blank" rel="noreferrer">
+                      <a href={pdfUrl(s)} target="_blank" rel="noreferrer">
                         open PDF
                       </a>
                     </>
                   )}
                 </div>
-                <p>{s.text.length > 400 ? s.text.slice(0, 400) + "…" : s.text}</p>
+                <p>{s.text.length > 500 ? s.text.slice(0, 500) + "…" : s.text}</p>
               </li>
             ))}
           </ol>

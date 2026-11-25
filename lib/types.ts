@@ -1,4 +1,11 @@
-export type SportId = "soccer" | "ice-hockey" | "inline-hockey" | "cricket";
+export type SportId =
+  | "inline-hockey"
+  | "ice-hockey"
+  | "soccer"
+  | "cricket"
+  | "netball"
+  | "basketball"
+  | "afl";
 
 /** One searchable piece of a rulebook: usually a numbered rule section. */
 export interface RuleChunk {
