@@ -15,6 +15,10 @@ export interface HeadingRules {
   knownTitles?: string[];
   /** Sub-section heading. Groups: 1 = number, 2 = title. */
   section?: RegExp;
+  /** Deepest section numbering to treat as a heading: 1 = "25.7", 2 = "25.7.1" (default 2). */
+  sectionDepth?: number;
+  /** No separate rule headings: the rule number is the first part of each section number. */
+  implicitRules?: boolean;
   /** Running header/footer to drop, tested against the line with all whitespace removed. */
   footer?: RegExp;
   /** Prefix for refs, e.g. "Law" or "Rule". */
