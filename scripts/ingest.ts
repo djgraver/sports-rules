@@ -14,7 +14,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { SPORTS, type SourceDoc } from "../lib/sources.ts";
-import { splitRulebook } from "../lib/split.ts";
+import { cleanPage, splitRulebook } from "../lib/split.ts";
 import type { RuleChunk, SportIndexFile } from "../lib/types.ts";
 
 const args = process.argv.slice(2);
@@ -44,7 +44,8 @@ async function download(doc: SourceDoc, file: string): Promise<{ bytes: Buffer; 
       writeFileSync(file, bytes);
       return { bytes, url };
     } catch (e) {
-      errors.push(`${url}: ${(e as Error).message}`);
+      const err = e as Error & { cause?: { code?: string; message?: string } };
+      errors.push(`${url}: ${err.message}${err.cause ? ` (${err.cause.code ?? err.cause.message})` : ""}`);
     }
   }
   throw new Error(`could not download "${doc.name}":\n  ${errors.join("\n  ")}`);
@@ -85,8 +86,15 @@ for (const sport of SPORTS) {
       console.log(`  ${doc.name}: ${pages.length} pages, ${res.rulesFound} rule headings, ${res.chunks.length} chunks${res.usedFallback ? " (FALLBACK: page chunks, heading patterns need tuning)" : ""}`);
       console.log(`  refs: ${[...new Set(res.chunks.map((c) => c.ref))].slice(0, 25).join(", ")}`);
       if (res.usedFallback || process.env.INGEST_DEBUG) {
+        // Lines that look like headings, to help tune the patterns in lib/sources.ts.
+        const candidates = pages
+          .slice(0, 40)
+          .flatMap((t, p) => cleanPage(t).split("\n").map((l) => [p + 1, l.trim()] as const))
+          .filter(([, l]) => /^(rule|law|section|article)\b/i.test(l) || /^\d{1,3}(\.\d{1,2})*\.?(\s|$)/.test(l))
+          .slice(0, 80);
+        console.log(`  --- heading-like lines (first 40 pages) ---\n${candidates.map(([p, l]) => `  p${p} | ${l}`).join("\n")}`);
         const mid = Math.floor(pages.length / 2);
-        console.log(`  --- sample text, page ${mid + 1} ---\n${pages[mid].split("\n").slice(0, 60).map((l) => `  | ${l}`).join("\n")}`);
+        console.log(`  --- sample text, page ${mid + 1} ---\n${cleanPage(pages[mid]).split("\n").slice(0, 40).map((l) => `  | ${l}`).join("\n")}`);
       }
     } catch (e) {
       failures++;

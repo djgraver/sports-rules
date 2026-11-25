@@ -69,6 +69,15 @@ function cleanText(lines: string[]): string {
     .trim();
 }
 
+/** Remove zero-width characters and lines in other scripts (e.g. the Hindi half of a bilingual edition). */
+export function cleanPage(text: string): string {
+  return text
+    .replace(/[\u200b-\u200d\ufeff\u00ad]/g, "")
+    .split("\n")
+    .filter((l) => !/[\u0900-\u097f]/.test(l))
+    .join("\n");
+}
+
 export function splitRulebook(input: SplitInput): SplitResult {
   const { headings, sport, source, kind } = input;
   const chunks: RuleChunk[] = [];
@@ -79,6 +88,10 @@ export function splitRulebook(input: SplitInput): SplitResult {
   let section: { num: string; title: string } | null = null;
   let buf: string[] = [];
   let startPage = input.firstPage ?? 1;
+  /** A dotted section number printed alone on a line; its title is on the next line. */
+  let pendingSection: string | null = null;
+  const isFooter = (line: string) => !!headings.footer && headings.footer.test(line.replace(/\s+/g, ""));
+  const belongsToRule = (num: string) => !num.includes(".") || (!!rule && num.split(".")[0] === rule.num);
 
   const flush = () => {
     const text = cleanText(buf);
@@ -107,9 +120,20 @@ export function splitRulebook(input: SplitInput): SplitResult {
 
   for (let p = (input.firstPage ?? 1) - 1; p < input.pages.length; p++) {
     const pageNo = p + 1;
-    for (const raw of input.pages[p].split("\n")) {
+    for (const raw of cleanPage(input.pages[p]).split("\n")) {
       const line = raw.trim();
-      if (!line || /^\d{1,3}$/.test(line)) continue; // blank lines and bare page numbers
+      if (!line || /^\d{1,3}$/.test(line) || isFooter(line)) continue; // blanks, bare page numbers, running footers
+
+      if (pendingSection) {
+        const num = pendingSection;
+        pendingSection = null;
+        if (line.length <= 80 && /^[A-Z]/.test(line)) {
+          flush();
+          section = { num, title: line };
+          startPage = pageNo;
+          continue;
+        }
+      }
 
       let newRule: { num: string; title: string } | null = null;
       if (headings.knownTitles) newRule = matchKnownTitle(line, headings.knownTitles);
@@ -128,10 +152,18 @@ export function splitRulebook(input: SplitInput): SplitResult {
         continue;
       }
 
+      if (rule) {
+        const lone = line.match(/^(\d{1,3}(?:\.\d{1,2}){1,2})\.?$/);
+        if (lone && belongsToRule(lone[1])) {
+          pendingSection = lone[1];
+          continue;
+        }
+      }
+
       if (rule && headings.section) {
         const m = line.match(headings.section);
         // Dotted section numbers must belong to the current rule (avoids "3.5 m" style false hits).
-        if (m && (!m[1].includes(".") || m[1].split(".")[0] === rule.num)) {
+        if (m && belongsToRule(m[1])) {
           flush();
           section = { num: m[1], title: m[2].trim() };
           startPage = pageNo;
@@ -150,7 +182,7 @@ export function splitRulebook(input: SplitInput): SplitResult {
   // Headings not recognised: fall back to one chunk per page so the book is still searchable.
   const fallback: RuleChunk[] = [];
   input.pages.forEach((pageText, i) => {
-    const text = cleanText(pageText.split("\n").map((l) => l.trim()).filter(Boolean));
+    const text = cleanText(cleanPage(pageText).split("\n").map((l) => l.trim()).filter(Boolean));
     if (text.length < MIN_CHARS || i + 1 < (input.firstPage ?? 1)) return;
     splitLong(text).forEach((part, j) => {
       fallback.push({
