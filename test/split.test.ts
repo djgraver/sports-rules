@@ -104,3 +104,11 @@ test("handles zero-width spaces, lone section numbers, footers and bilingual lin
   assert.equal(c.section, "Management of Penalties");
   assert.doesNotMatch(c.text, /RULEBOOK|हिंदी|​/);
 });
+
+test("part ids never collide with section ids", () => {
+  const pages = soccer.headings.knownTitles!.map((t, i) =>
+    i === 4 ? `${i + 1} ${t}\n${filler.repeat(80)}\n2. Second section\n${filler}` : `${i + 1} ${t}\n${filler.repeat(2)}`,
+  );
+  const res = splitRulebook({ sport: "soccer", source: soccer.name, kind: "rules", headings: soccer.headings, pages });
+  assert.equal(new Set(res.chunks.map((c) => c.id)).size, res.chunks.length);
+});

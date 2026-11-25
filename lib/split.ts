@@ -135,7 +135,7 @@ export function splitRulebook(input: SplitInput): SplitResult {
       const n = (seen.get(base) ?? 0) + 1;
       seen.set(base, n);
       chunks.push({
-        id: n === 1 ? base : `${base}-${n}`,
+        id: n === 1 ? base : `${base}~${n}`,
         sport,
         source,
         kind,
