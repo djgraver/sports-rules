@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: "0 22 1 * *" # monthly, after the data repo's rulebook check
 
 permissions:
   contents: read
@@ -19,6 +21,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Parsed rulebooks live in a private repo; RULES_DATA_TOKEN is a fine-grained
+      # token with read-only Contents access to it.
+      - uses: actions/checkout@v4
+        with:
+          repository: djgraver/sports-rules-data
+          token: ${{ secrets.RULES_DATA_TOKEN }}
+          path: data
+          sparse-checkout: rules
       - uses: actions/setup-node@v4
         with:
           node-version: 22

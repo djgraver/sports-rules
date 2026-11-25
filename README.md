@@ -27,7 +27,7 @@ Source URLs and heading patterns live in [`lib/sources.ts`](lib/sources.ts).
 
 ## How it works
 
-1. **Ingest** (`npm run ingest`): downloads each PDF from the governing body, extracts text with `pdftotext`, and splits it into numbered rule sections (`lib/split.ts`). Output goes to `data/rules/<sport>.json`. A GitHub Action re-runs this monthly and opens a PR when a rulebook changes.
+1. **Ingest** (`npm run ingest`): downloads each PDF from the governing body, extracts text with `pdftotext`, and splits it into numbered rule sections (`lib/split.ts`). The results (original PDFs, full plain text and parsed `rules/<sport>.json`) are stored in the private `djgraver/sports-rules-data` repo, whose own workflow runs this code and checks for new editions monthly.
 2. **Search** (`lib/search.ts`): BM25 keyword search (MiniSearch) over the rule sections, run in the browser.
 3. **Answer** (`lib/answer.ts`): called from the browser with the user's own Anthropic API key (entered under Settings, stored only in that browser). Without a key the app still searches the rules. Claude first rewrites the question into rulebook vocabulary ("keeper" → "goalkeeper", "back pass" → "deliberately kicked by a team-mate"), the app searches with those terms, then Claude writes the answer from the matching rules only, citing rule numbers.
 
@@ -35,14 +35,18 @@ Source URLs and heading patterns live in [`lib/sources.ts`](lib/sources.ts).
 
 ```bash
 npm install
-sudo apt-get install poppler-utils   # or: brew install poppler (only needed for ingest)
-npm run ingest                       # optional: data/rules/ is already committed
+git clone https://github.com/djgraver/sports-rules-data data   # private: rulebook data
 npm run dev
 ```
 
 ## Hosting
 
-The app is a static site deployed to GitHub Pages by `.github/workflows/pages.yml` on every push to `main`. One-time setup: in the repo's **Settings → Pages**, set **Source** to **GitHub Actions**. The site is then at `https://<user>.github.io/sports-rules/` and can be added to a phone's home screen or wrapped with Hermit.
+The app is a static site deployed to GitHub Pages by `.github/workflows/pages.yml` on every push to `main`. One-time setup:
+
+1. In this repo's **Settings → Pages**, set **Source** to **GitHub Actions**.
+2. Create a fine-grained personal access token with access to only `djgraver/sports-rules-data` and **Contents: Read-only**, and add it to this repo as the Actions secret `RULES_DATA_TOKEN`.
+
+ The site is then at `https://<user>.github.io/sports-rules/` and can be added to a phone's home screen or wrapped with Hermit.
 
 ## Copyright
 

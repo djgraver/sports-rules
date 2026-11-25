@@ -7,6 +7,12 @@
  *   npm run ingest -- --offline    # reuse PDFs already in data/raw/
  *   npm run ingest -- --dry-run    # don't write data/rules/
  *
+ * Output goes under $RULES_DATA_DIR (default ./data), which is a checkout of the
+ * private sports-rules-data repo:
+ *   raw/<sport>-<n>.pdf   the downloaded originals (reused with --offline)
+ *   rules/<sport>.json    parsed rule sections, served to the app
+ *   text/<sport>--<doc>.txt  full plain text, page by page
+ *
  * Needs `pdftotext` (poppler-utils) on the PATH.
  */
 import { createHash } from "node:crypto";
@@ -21,10 +27,10 @@ const args = process.argv.slice(2);
 const offline = args.includes("--offline");
 const dryRun = args.includes("--dry-run");
 const only = args.filter((a) => !a.startsWith("--"));
-const RAW = "data/raw";
-const OUT = "data/rules";
-// Full plain text of each rulebook, page by page (gitignored until we decide whether to publish it).
-const TEXT = "data/text";
+const DATA = process.env.RULES_DATA_DIR || "data";
+const RAW = path.join(DATA, "raw");
+const OUT = path.join(DATA, "rules");
+const TEXT = path.join(DATA, "text");
 mkdirSync(RAW, { recursive: true });
 mkdirSync(OUT, { recursive: true });
 mkdirSync(TEXT, { recursive: true });
