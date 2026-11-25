@@ -112,3 +112,28 @@ test("part ids never collide with section ids", () => {
   const res = splitRulebook({ sport: "soccer", source: soccer.name, kind: "rules", headings: soccer.headings, pages });
   assert.equal(new Set(res.chunks.map((c) => c.id)).size, res.chunks.length);
 });
+
+test("netball-style numbered clauses become <rule>.<clause> chunks under their sub-heading", () => {
+  const netball = SPORTS.find((s) => s.id === "netball")!.docs[0];
+  const pages = Array.from({ length: 6 }, (_, i) =>
+    [
+      `RULE ${i + 1}: TITLE NUMBER ${i + 1}`,
+      "STARTING PLAY",
+      "1. The centre pass is taken by the team that won the toss and play alternates after each goal.",
+      "7.",
+      "During a stoppage all players not affected remain on the court and umpires stay put.",
+      `RULE ${i + 1}: TITLE NUMBER ${i + 1}`,
+      "INJURY/ILLNESS OF A PLAYER OR BLOOD",
+      "9. The umpires hold time for injury following a verifiable request by an on-court player.",
+    ].join("\n"),
+  );
+  const res = splitRulebook({ sport: "netball", source: "x", kind: "rules", headings: netball.headings, pages });
+  assert.equal(res.usedFallback, false);
+  const c7 = res.chunks.find((c) => c.ref === "Rule 3.7");
+  assert.ok(c7);
+  assert.equal(c7.section, "STARTING PLAY");
+  assert.match(c7.text, /During a stoppage/);
+  const c9 = res.chunks.find((c) => c.ref === "Rule 3.9");
+  assert.equal(c9?.section, "INJURY/ILLNESS OF A PLAYER OR BLOOD");
+  assert.match(c9!.text, /^The umpires hold time/);
+});
