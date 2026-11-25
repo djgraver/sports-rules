@@ -15,6 +15,8 @@ export interface HeadingRules {
   knownTitles?: string[];
   /** Sub-section heading. Groups: 1 = number, 2 = title. */
   section?: RegExp;
+  /** Running header/footer to drop, tested against the line with all whitespace removed. */
+  footer?: RegExp;
   /** Prefix for refs, e.g. "Law" or "Rule". */
   refPrefix: string;
 }
@@ -89,6 +91,7 @@ export const SPORTS: Sport[] = [
         headings: {
           knownTitles: IFAB_LAWS,
           section: /^(\d{1,2})\.\s+([A-Z][^.]{2,80})$/,
+          footer: /^LawsoftheGame\d{4}\/\d{2}\|/i,
           refPrefix: "Law",
         },
       },
@@ -102,7 +105,12 @@ export const SPORTS: Sport[] = [
       {
         name: "IIHF Rule Book 2026-27",
         kind: "rules",
-        urls: ["https://blob.iihf.com/iihf-media/iihfmvc/media/downloads/rule%20book/2026-27_iihf_rule_book.pdf"],
+        urls: [
+          "https://blob.iihf.com/iihf-media/iihfmvc/media/downloads/rule%20book/2026-27_iihf_rule_book.pdf",
+          // Copies of the same official book hosted by IIHF member federations.
+          "https://www.lhf.lv/files/archive/187/2026-27-iihf-rule-book.pdf",
+          "https://static.fisg.it/wp-content/uploads/2026/07/20125550/2026-27_iihf_rule_book_compressed.pdf",
+        ],
         officialPage: "https://www.iihf.com/en/statichub/4719/rules-and-regulations",
         headings: {
           rule: /^RULE\s+(\d{1,3})\s*[-–—|:]?\s*(.{2,80})$/i,
@@ -142,7 +150,8 @@ export const SPORTS: Sport[] = [
         officialPage: "https://www.lords.org/mcc/the-laws-of-cricket",
         headings: {
           knownTitles: MCC_LAWS,
-          section: /^(\d{1,2}\.\d{1,2}(?:\.\d{1,2})?)\s+(.{2,80})$/,
+          section: /^(\d{1,2}\.\d{1,2}(?:\.\d{1,2})?)\s+([A-Z].{2,80})$/,
+          footer: /^TheLawsofCricket2017Code|^Page\|?\d+$/i,
           refPrefix: "Law",
         },
       },

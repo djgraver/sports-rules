@@ -80,3 +80,27 @@ test("long sections are split into parts with unique ids", () => {
   assert.ok(law1.length > 1);
   assert.equal(new Set(law1.map((c) => c.id)).size, law1.length);
 });
+
+test("handles zero-width spaces, lone section numbers, footers and bilingual lines", () => {
+  const headings = {
+    rule: /^RULE\s+(\d{1,3})\s*[-–—|:]?\s*(.{2,80})$/i,
+    footer: /^RULEBOOKINLINEHOCKEY\d{4}$/,
+    refPrefix: "Rule",
+  };
+  const pages = Array.from({ length: 5 }, (_, i) =>
+    [
+      `RULE ${i + 1} - Title ${i + 1}`,
+      "RULEBOOK INLINE HOCKEY 2027​ ​",
+      `${i + 1}.2​`,
+      "",
+      "Management of Penalties",
+      "इस नियम का हिंदी अनुवाद",
+      filler,
+    ].join("\n"),
+  );
+  const res = splitRulebook({ sport: "inline-hockey", source: "x", kind: "rules", headings, pages });
+  const c = res.chunks.find((x) => x.ref === "Rule 3.2");
+  assert.ok(c, "Rule 3.2 found");
+  assert.equal(c.section, "Management of Penalties");
+  assert.doesNotMatch(c.text, /RULEBOOK|हिंदी|​/);
+});
