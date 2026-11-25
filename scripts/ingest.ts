@@ -23,8 +23,11 @@ const dryRun = args.includes("--dry-run");
 const only = args.filter((a) => !a.startsWith("--"));
 const RAW = "data/raw";
 const OUT = "data/rules";
+// Full plain text of each rulebook, page by page (gitignored until we decide whether to publish it).
+const TEXT = "data/text";
 mkdirSync(RAW, { recursive: true });
 mkdirSync(OUT, { recursive: true });
+mkdirSync(TEXT, { recursive: true });
 
 async function download(doc: SourceDoc, file: string): Promise<{ bytes: Buffer; url: string }> {
   if (offline) {
@@ -81,6 +84,11 @@ for (const sport of SPORTS) {
         pages,
         firstPage: doc.firstPage,
       });
+      const slugName = doc.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      writeFileSync(
+        path.join(TEXT, `${sport.id}--${slugName}.txt`),
+        `${doc.name}\nSource: ${url}\n\n` + pages.map((t, i) => `=== Page ${i + 1} ===\n${cleanPage(t).trim()}\n`).join("\n"),
+      );
       documents.push({ source: doc.name, kind: doc.kind, url, sha256, pages: pages.length });
       chunks.push(...res.chunks);
       console.log(`  ${doc.name}: ${pages.length} pages, ${res.rulesFound} rule headings, ${res.chunks.length} chunks${res.usedFallback ? " (FALLBACK: page chunks, heading patterns need tuning)" : ""}`);

@@ -70,3 +70,17 @@ summary { cursor: pointer; font-weight: 600; }
 .sources p { margin: 4px 0 0; font-size: 0.92rem; }
 a { color: var(--accent); }
 footer { color: var(--muted); font-size: 0.85rem; margin-top: 24px; }
+.row { display: flex; justify-content: space-between; align-items: baseline; }
+button.link {
+  width: auto; margin: 0; padding: 0; background: none; border: 0;
+  color: var(--accent); font-weight: 500; font-size: 0.9rem; cursor: pointer; text-decoration: underline;
+}
+input {
+  width: 100%; font: inherit; color: inherit; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+}
+.settings { margin: 8px 0 12px; padding: 12px; border: 1px dashed var(--border); border-radius: 8px; }
+.tag {
+  margin-left: 6px; padding: 1px 6px; font-size: 0.75rem; border-radius: 999px;
+  background: var(--accent); color: var(--bg);
+}

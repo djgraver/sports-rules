@@ -1,8 +1,13 @@
 import type { NextConfig } from "next";
 
+// GitHub Pages serves a project site from /<repo>/. Set NEXT_PUBLIC_BASE_PATH="" for a custom domain.
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
 const nextConfig: NextConfig = {
-  // Make sure the parsed rulebooks ship with the serverless function.
-  outputFileTracingIncludes: { "/api/ask": ["./data/rules/**/*"] },
+  output: "export",
+  basePath,
+  trailingSlash: true,
+  images: { unoptimized: true },
 };
 
 export default nextConfig;

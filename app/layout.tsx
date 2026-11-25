@@ -3,8 +3,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Rules Ref",
+  appleWebApp: { capable: true, title: "Rules Ref", statusBarStyle: "default" },
   description: "Plain-language answers to rules questions for amateur sport in Australia, with citations to the official rulebooks.",
-  manifest: "/manifest.webmanifest",
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#14532d" };

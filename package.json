@@ -1,6 +1,6 @@
 {
   "name": "sports-rules",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,9 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test test/*.test.ts",
-    "ingest": "tsx scripts/ingest.ts"
+    "ingest": "tsx scripts/ingest.ts",
+    "prebuild": "node scripts/copy-rules.mjs",
+    "predev": "node scripts/copy-rules.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.14.0",
