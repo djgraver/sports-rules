@@ -98,6 +98,8 @@ export function splitRulebook(input: SplitInput): SplitResult {
   let pendingSection: string | null = null;
   /** A rule heading printed without its title ("RULE 70"); take the title from the next heading line. */
   let pendingRuleTitle = false;
+  /** Latest un-numbered sub-heading, used as the title of following clauses. */
+  let subheading = "";
   const maxDepth = headings.sectionDepth ?? 2;
   const isFooter = (line: string) => !!headings.footer && headings.footer.test(line.replace(/\s+/g, ""));
   const ruleOf = (num: string) => num.split(/[.-]/)[0];
@@ -175,10 +177,27 @@ export function splitRulebook(input: SplitInput): SplitResult {
         flush();
         rule = newRule;
         section = null;
+        subheading = "";
         startPage = pageNo;
         pendingRuleTitle = !newRule.title;
         rulesFound++;
         continue;
+      }
+
+      if (rule && headings.subheading && headings.subheading.test(line)) {
+        subheading = line;
+        continue;
+      }
+
+      if (rule && headings.clause) {
+        const m = line.match(headings.clause);
+        if (m) {
+          flush();
+          section = { num: m[1], title: subheading };
+          startPage = pageNo;
+          if (m[2]) buf.push(m[2]);
+          continue;
+        }
       }
 
       const sectionsAllowed = !!rule || !!headings.implicitRules;

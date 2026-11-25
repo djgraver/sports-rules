@@ -15,6 +15,13 @@ export interface HeadingRules {
   knownTitles?: string[];
   /** Sub-section heading. Groups: 1 = number, 2 = title. */
   section?: RegExp;
+  /**
+   * Numbered clauses ("8. Play restarts from…"): each starts a new chunk with ref
+   * <rule>.<clause>, and the clause text stays in the body. Groups: 1 = number, 2 = rest of line.
+   */
+  clause?: RegExp;
+  /** Un-numbered sub-headings (e.g. all-caps lines) used as the section title for following clauses. */
+  subheading?: RegExp;
   /** Deepest section numbering to treat as a heading: 1 = "25.7", 2 = "25.7.1" (default 2). */
   sectionDepth?: number;
   /** No separate rule headings: the rule number is the first part of each section number. */
@@ -179,9 +186,9 @@ export const SPORTS: Sport[] = [
         urls: ["https://netballhamilton.org.nz/media/1997/world-netball-rules-book-2024.pdf"],
         officialPage: "https://netball.com.au/rules-netball",
         headings: {
-          section: /^(\d{1,2}\.\d{1,2})\.?\s+([A-Z].{2,80})$/,
-          sectionDepth: 1,
-          implicitRules: true,
+          rule: /^RULE\s+(\d{1,2})\s*:\s*(.{2,80})$/,
+          clause: /^(\d{1,2})\.(?:\s+(.*))?$/,
+          subheading: /^[A-Z][A-Z0-9 ,'’/&()-]{3,70}$/,
           refPrefix: "Rule",
         },
       },
