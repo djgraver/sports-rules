@@ -1,5 +1,5 @@
 import MiniSearch from "minisearch";
-import type { RuleChunk, SportIndexFile } from "./types.ts";
+import type { RuleChunk, Scenario, ScenarioFile, SportIndexFile } from "./types.ts";
 
 export interface LoadedSport {
   file: SportIndexFile;
@@ -44,5 +44,46 @@ export function searchRules(loaded: LoadedSport, queries: string[], limit = 12):
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
     .map(([id]) => loaded.byId.get(id)!)
+    .filter(Boolean);
+}
+
+export interface LoadedScenarios {
+  file: ScenarioFile;
+  index: MiniSearch<Scenario>;
+  byId: Map<string, Scenario>;
+}
+
+/** Builds the search index for one sport's grey-area scenarios. */
+export function buildScenarioIndex(data: ScenarioFile): LoadedScenarios {
+  const index = new MiniSearch<Scenario>({
+    fields: ["title", "tags", "situation", "rules", "readings", "best_call"],
+    storeFields: [],
+    extractField: (doc, field) => {
+      const v = (doc as unknown as Record<string, unknown>)[field];
+      if (Array.isArray(v)) return v.map((x) => (typeof x === "string" ? x : Object.values(x).join(" "))).join(" ");
+      return String(v ?? "");
+    },
+    searchOptions: { boost: { title: 3, tags: 2.5, situation: 1.5 }, fuzzy: 0.2, prefix: true, combineWith: "OR" },
+  });
+  index.addAll(data.scenarios);
+  return { file: data, index, byId: new Map(data.scenarios.map((s) => [s.id, s])) };
+}
+
+const STOP = new Set("a an and are at be but by can did do does for from has have he her his how i if in is it its my of on or our out she so that the their them then they this to was we were what when who why will with you your".split(" "));
+
+/**
+ * Finds the scenarios closest to a question. Weak matches (a single shared word,
+ * or far below the best hit) are dropped so unrelated cards don't appear.
+ */
+export function searchScenarios(loaded: LoadedScenarios, question: string, limit = 3): Scenario[] {
+  const words = question.toLowerCase().match(/[a-z0-9]+/g)?.filter((w) => w.length > 1 && !STOP.has(w)) ?? [];
+  if (!words.length) return [];
+  const results = loaded.index.search(words.join(" "));
+  const top = results[0]?.score ?? 0;
+  const minTerms = words.length > 1 ? 2 : 1;
+  return results
+    .filter((r) => r.score >= top * 0.4 && new Set(r.queryTerms).size >= minTerms)
+    .slice(0, limit)
+    .map((r) => loaded.byId.get(String(r.id))!)
     .filter(Boolean);
 }

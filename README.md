@@ -2,12 +2,13 @@
 
 Plain-language answers to rules questions for amateur sport in Australia, grounded in the official rulebooks.
 
-Ask about a situation from your game and you get:
+Describe a situation from your game and you get:
 
-- a short answer you can read at the ground,
-- the relevant rules, quoted with their numbers (e.g. `[Law 12.2]`),
-- any official ruling (casebook or interpretation) that covers it,
-- and when the rules are genuinely unclear, both readings plus a best call with a confidence level.
+- the matching **common calls**: a pre-written library of grey-area situations (58 across 7 sports, weighted to inline hockey), each with the rules that apply, any official precedent, both readings where there's a real argument, and a best call with a confidence level,
+- the matching rules from the official rulebook, with their numbers and a link to the page in the PDF,
+- optionally, a written AI answer for anything the library doesn't cover (needs the user's own paid Anthropic API key; off by default).
+
+Everything except the optional AI answer runs in the browser with no account or key.
 
 ## Sports and sources
 
@@ -28,8 +29,9 @@ Source URLs and heading patterns live in [`lib/sources.ts`](lib/sources.ts).
 ## How it works
 
 1. **Ingest** (`npm run ingest`): downloads each PDF from the governing body, extracts text with `pdftotext`, and splits it into numbered rule sections (`lib/split.ts`). The results (original PDFs, full plain text and parsed `rules/<sport>.json`) are stored in the private `djgraver/sports-rules-data` repo, whose own workflow runs this code and checks for new editions monthly.
-2. **Search** (`lib/search.ts`): BM25 keyword search (MiniSearch) over the rule sections, run in the browser.
-3. **Answer** (`lib/answer.ts`): called from the browser with the user's own Anthropic API key (entered under Settings, stored only in that browser). Without a key the app still searches the rules. Claude first rewrites the question into rulebook vocabulary ("keeper" → "goalkeeper", "back pass" → "deliberately kicked by a team-mate"), the app searches with those terms, then Claude writes the answer from the matching rules only, citing rule numbers.
+2. **Common calls**: hand-written in the data repo as `scenarios/<sport>.json` (see `Scenario` in `lib/types.ts`). Every rule a scenario cites was checked against the parsed rulebook text.
+3. **Search** (`lib/search.ts`): BM25 keyword search (MiniSearch) over the rule sections and the common calls, run in the browser. Common calls need at least two matching words, so unrelated cards don't show.
+4. **Optional AI answer** (`lib/answer.ts`): called from the browser with the user's own Anthropic API key (entered under Settings, stored only in that browser). Without a key the app still searches the rules. Claude first rewrites the question into rulebook vocabulary ("keeper" → "goalkeeper", "back pass" → "deliberately kicked by a team-mate"), the app searches with those terms, then Claude writes the answer from the matching rules only, citing rule numbers.
 
 ## Running locally
 

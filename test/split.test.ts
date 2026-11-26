@@ -137,3 +137,16 @@ test("netball-style numbered clauses become <rule>.<clause> chunks under their s
   assert.equal(c9?.section, "INJURY/ILLNESS OF A PLAYER OR BLOOD");
   assert.match(c9!.text, /^The umpires hold time/);
 });
+
+test("known titles wrapped over two lines are recognised", () => {
+  const titles = soccer.headings.knownTitles!;
+  const pages = titles.map((t, i) => {
+    const words = t.split(" ");
+    const heading = i === 8 ? `${words.slice(0, 3).join(" ")}\n${words.slice(3).join(" ")}` : t;
+    return `${heading}\n1. First section\n${filler.repeat(2)}`;
+  });
+  const res = splitRulebook({ sport: "soccer", source: soccer.name, kind: "rules", headings: soccer.headings, pages });
+  const law9 = res.chunks.find((c) => c.ref === "Law 9.1");
+  assert.ok(law9, "Law 9.1 found");
+  assert.equal(law9.title, "The Ball In and Out of Play");
+});

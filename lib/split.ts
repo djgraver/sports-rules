@@ -152,8 +152,9 @@ export function splitRulebook(input: SplitInput): SplitResult {
 
   for (let p = (input.firstPage ?? 1) - 1; p < input.pages.length; p++) {
     const pageNo = p + 1;
-    for (const raw of cleanPage(input.pages[p]).split("\n")) {
-      const line = raw.trim();
+    const lines = cleanPage(input.pages[p]).split("\n");
+    for (let li = 0; li < lines.length; li++) {
+      const line = lines[li].trim();
       if (!line || /^\d{1,3}$/.test(line) || isFooter(line)) continue; // blanks, bare page numbers, running footers
 
       if (pendingSection) {
@@ -166,7 +167,15 @@ export function splitRulebook(input: SplitInput): SplitResult {
       }
 
       let newRule: { num: string; title: string } | null = null;
-      if (headings.knownTitles) newRule = matchKnownTitle(line, headings.knownTitles);
+      if (headings.knownTitles) {
+        newRule = matchKnownTitle(line, headings.knownTitles);
+        // Titles set in large type often wrap onto a second line ("The Ball in and" / "out of Play").
+        const next = lines[li + 1]?.trim();
+        if (!newRule && next && line.length < 40 && next.length < 40) {
+          newRule = matchKnownTitle(`${line} ${next}`, headings.knownTitles);
+          if (newRule) li++;
+        }
+      }
       if (!newRule && headings.rule) {
         const m = line.match(headings.rule);
         if (m) newRule = { num: m[1], title: (m[2] ?? "").trim() };
