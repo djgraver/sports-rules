@@ -87,6 +87,7 @@ for (const sport of SPORTS) {
         headings: doc.headings,
         pages,
         firstPage: doc.firstPage,
+        lastPage: doc.lastPage,
       });
       const slugName = doc.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
       writeFileSync(
