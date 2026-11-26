@@ -44,7 +44,12 @@ npm run dev
 The app is a static site deployed to GitHub Pages by `.github/workflows/pages.yml` on every push to `main`. One-time setup:
 
 1. In this repo's **Settings → Pages**, set **Source** to **GitHub Actions**.
-2. Create a fine-grained personal access token with access to only `djgraver/sports-rules-data` and **Contents: Read-only**, and add it to this repo as the Actions secret `RULES_DATA_TOKEN`.
+2. Give the build read access to the private data repo with a deploy key:
+   - Generate a key pair: `ssh-keygen -t ed25519 -N "" -C "sports-rules pages" -f rules_data_key`
+   - In **sports-rules-data → Settings → Deploy keys → Add deploy key**, paste `rules_data_key.pub` and leave "Allow write access" unticked.
+   - In **sports-rules → Settings → Secrets and variables → Actions**, add a secret `RULES_DATA_DEPLOY_KEY` containing the whole of `rules_data_key` (the private key).
+
+   (A fine-grained token with read-only Contents access, saved as `RULES_DATA_TOKEN`, works too.)
 
  The site is then at `https://<user>.github.io/sports-rules/` and can be added to a phone's home screen or wrapped with Hermit.
 
