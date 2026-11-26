@@ -1,8 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { SPORTS, DEFAULT_SPORT } from "@/lib/sources.ts";
-import type { SportIndexFile } from "@/lib/types.ts";
+import type { ScenarioFile, SportIndexFile } from "@/lib/types.ts";
 import Ask, { type SportOption } from "./ask.tsx";
+
+function scenarioCount(id: string): number {
+  const file = path.join(process.cwd(), "data", "scenarios", `${id}.json`);
+  return existsSync(file) ? (JSON.parse(readFileSync(file, "utf8")) as ScenarioFile).scenarios.length : 0;
+}
 
 // Runs at build time (static export): lists which rulebooks have been parsed.
 function sportOptions(): SportOption[] {
@@ -15,6 +20,7 @@ function sportOptions(): SportOption[] {
       governingBodies: s.governingBodies,
       loaded: !!data?.chunks.length,
       documents: data?.documents.map((d) => ({ name: d.source, kind: d.kind })) ?? [],
+      scenarioCount: scenarioCount(s.id),
     };
   });
 }
@@ -24,7 +30,7 @@ export default function Home() {
     <main>
       <header>
         <h1>Rules Ref</h1>
-        <p>Describe a situation from your game. Answers quote the official rulebook, and when the rules are unclear you get both sides and a best call.</p>
+        <p>Describe a situation from your game. You get the matching common calls (both sides of the argument and a best call) and the official rules they come from.</p>
       </header>
       <Ask sports={sportOptions()} defaultSport={DEFAULT_SPORT} basePath={process.env.NEXT_PUBLIC_BASE_PATH ?? ""} />
       <footer>

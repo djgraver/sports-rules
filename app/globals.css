@@ -84,3 +84,21 @@ input {
   margin-left: 6px; padding: 1px 6px; font-size: 0.75rem; border-radius: 999px;
   background: var(--accent); color: var(--bg);
 }
+
+.browse { display: block; margin-top: 12px; }
+.browse-list { margin: 0; padding-left: 18px; }
+.browse-list li { margin: 6px 0; }
+.browse-list .link { text-align: left; }
+.scenario h2 { margin: 2px 0 8px; font-size: 1.2rem; }
+.scenario h3 { margin: 16px 0 6px; font-size: 1rem; color: var(--accent); }
+.scenario ul { margin: 0; padding-left: 18px; }
+.scenario li { margin: 6px 0; }
+.eyebrow { margin: 0; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.best-call { margin-top: 16px; padding: 10px 14px; border-left: 4px solid var(--accent); background: var(--bg); border-radius: 6px; }
+.best-call h3 { margin-top: 0; }
+.best-call p { margin: 0; }
+.tag[class*="confidence-"] { background: none; border: 1px solid; font-weight: 600; vertical-align: middle; }
+.confidence-high { border-color: var(--accent); color: var(--accent); }
+.confidence-medium { border-color: #b45309; color: #b45309; }
+.confidence-low { border-color: var(--error); color: var(--error); }
+@media (prefers-color-scheme: dark) { .confidence-medium { border-color: #fbbf24; color: #fbbf24; } }

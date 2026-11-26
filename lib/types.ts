@@ -32,3 +32,25 @@ export interface SportIndexFile {
   documents: { source: string; kind: RuleChunk["kind"]; url: string; sha256: string; pages: number }[];
   chunks: RuleChunk[];
 }
+
+/** A pre-written ruling on a common grey-area situation, stored in sports-rules-data/scenarios. */
+export interface Scenario {
+  id: string;
+  title: string;
+  situation: string;
+  tags: string[];
+  /** Rules that apply, with a plain-language summary of what each says. */
+  rules: { ref: string; says: string }[];
+  /** Official rulings or casebook entries that settle it, if any. */
+  precedent: { source: string; says: string }[];
+  /** The competing readings, when the rules can be read more than one way. Empty when the rule is clear. */
+  readings: { label: string; argument: string }[];
+  best_call: string;
+  confidence: "High" | "Medium" | "Low";
+}
+
+export interface ScenarioFile {
+  sport: SportId;
+  updated: string;
+  scenarios: Scenario[];
+}

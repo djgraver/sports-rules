@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { makeClient, planSearches, streamAnswer } from "@/lib/answer.ts";
-import { buildIndex, searchRules, type LoadedSport } from "@/lib/search.ts";
+import { buildIndex, buildScenarioIndex, searchRules, searchScenarios, type LoadedScenarios, type LoadedSport } from "@/lib/search.ts";
 import { getSport } from "@/lib/sources.ts";
-import type { RuleChunk, SportIndexFile } from "@/lib/types.ts";
+import type { RuleChunk, Scenario, ScenarioFile, SportIndexFile } from "@/lib/types.ts";
 
 export interface SportOption {
   id: string;
@@ -13,6 +13,7 @@ export interface SportOption {
   governingBodies: string;
   loaded: boolean;
   documents: { name: string; kind: string }[];
+  scenarioCount: number;
 }
 
 const EXAMPLES: Record<string, string> = {
@@ -48,9 +49,13 @@ export default function Ask({ sports, defaultSport, basePath }: { sports: SportO
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [sources, setSources] = useState<RuleChunk[]>([]);
+  const [matches, setMatches] = useState<Scenario[]>([]);
+  const [searched, setSearched] = useState(false);
+  const [browse, setBrowse] = useState<Scenario[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const indexes = useRef(new Map<string, LoadedSport>());
+  const scenarioIndexes = useRef(new Map<string, LoadedScenarios | null>());
   const current = sports.find((s) => s.id === sport)!;
 
   // Restore this browser's settings.
@@ -73,6 +78,34 @@ export default function Ask({ sports, defaultSport, basePath }: { sports: SportO
     return loaded;
   }
 
+  async function loadScenarios(id: string): Promise<LoadedScenarios | null> {
+    if (scenarioIndexes.current.has(id)) return scenarioIndexes.current.get(id)!;
+    let loaded: LoadedScenarios | null = null;
+    try {
+      const res = await fetch(`${basePath}/scenarios/${id}.json`);
+      if (res.ok) loaded = buildScenarioIndex((await res.json()) as ScenarioFile);
+    } catch {
+      // No scenarios for this sport: rules search still works.
+    }
+    scenarioIndexes.current.set(id, loaded);
+    return loaded;
+  }
+
+  // Changing sport clears the previous sport's results.
+  useEffect(() => {
+    setAnswer("");
+    setSources([]);
+    setMatches([]);
+    setSearched(false);
+    setBrowse(null);
+  }, [sport]);
+
+  async function toggleBrowse() {
+    if (browse) return setBrowse(null);
+    const loaded = await loadScenarios(sport);
+    setBrowse(loaded?.file.scenarios ?? []);
+  }
+
   async function ask(e: React.FormEvent) {
     e.preventDefault();
     const q = question.trim();
@@ -81,9 +114,13 @@ export default function Ask({ sports, defaultSport, basePath }: { sports: SportO
     setBusy(true);
     setAnswer("");
     setSources([]);
+    setMatches([]);
+    setBrowse(null);
     setError("");
     try {
-      const loaded = await loadIndex(sport);
+      const [loaded, scenarios] = await Promise.all([loadIndex(sport), loadScenarios(sport)]);
+      setMatches(scenarios ? searchScenarios(scenarios, q) : []);
+      setSearched(true);
       if (!apiKey) {
         // No key: plain keyword search over the rulebook.
         setSources(searchRules(loaded, [q], 8));
@@ -155,7 +192,11 @@ export default function Ask({ sports, defaultSport, basePath }: { sports: SportO
 
         {showSettings && (
           <div className="settings">
-            <label htmlFor="key">Anthropic API key</label>
+            <p>
+              <strong>Optional: AI answers.</strong> Paste an Anthropic API key to get a written answer for situations
+              the common calls don&apos;t cover. Anthropic charges for each question, billed to your key.
+            </p>
+            <label htmlFor="key">Anthropic API key (paid)</label>
             <input
               id="key"
               type="password"
@@ -166,8 +207,7 @@ export default function Ask({ sports, defaultSport, basePath }: { sports: SportO
               onBlur={() => store(KEY_STORAGE, apiKey)}
             />
             <p className="muted">
-              Stored only in this browser and sent only to Anthropic. Without a key you can still search the rulebooks;
-              with one you get plain-language answers.
+              Stored only in this browser and sent only to Anthropic. Everything else in the app works without it.
             </p>
           </div>
         )}
@@ -184,9 +224,37 @@ export default function Ask({ sports, defaultSport, basePath }: { sports: SportO
           }}
         />
         <button type="submit" disabled={busy || !question.trim() || !current.loaded}>
-          {busy ? "Checking the rulebook…" : apiKey ? "Ask" : "Search the rules"}
+          {busy ? "Checking the rulebook…" : apiKey ? "Ask (AI answer)" : "Find the call"}
         </button>
+        {current.scenarioCount > 0 && (
+          <button type="button" className="link browse" onClick={toggleBrowse}>
+            {browse ? "Hide common calls" : `Browse ${current.scenarioCount} common calls for ${current.name}`}
+          </button>
+        )}
       </form>
+
+      {browse && (
+        <section className="card">
+          <h2>Common calls: {current.name}</h2>
+          <ul className="browse-list">
+            {browse.map((s) => (
+              <li key={s.id}>
+                <button type="button" className="link" onClick={() => { setMatches([s]); setBrowse(null); setSearched(true); setSources([]); setAnswer(""); }}>
+                  {s.title}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {matches.map((s) => (
+        <ScenarioCard key={s.id} s={s} />
+      ))}
+
+      {searched && !busy && matches.length === 0 && current.scenarioCount > 0 && sources.length > 0 && (
+        <p className="muted">No common call matches that exactly. Here are the closest rules.</p>
+      )}
 
       {error && <p className="error">{error}</p>}
 
@@ -197,12 +265,12 @@ export default function Ask({ sports, defaultSport, basePath }: { sports: SportO
       )}
 
       {!apiKey && sources.length > 0 && !busy && (
-        <p className="muted">Showing matching rules. Add an API key in Settings to get a plain-language answer.</p>
+        <p className="muted">Want a written answer for something unusual? AI answers are an optional paid extra in Settings.</p>
       )}
 
       {sources.length > 0 && (
-        <details className="card" open={!apiKey}>
-          <summary>Rules consulted ({sources.length})</summary>
+        <details className="card" open={!apiKey && matches.length === 0}>
+          <summary>{apiKey ? "Rules consulted" : "Matching rules"} ({sources.length})</summary>
           <ol className="sources">
             {sources.map((s) => (
               <li key={s.id}>
@@ -228,5 +296,53 @@ export default function Ask({ sports, defaultSport, basePath }: { sports: SportO
         </details>
       )}
     </section>
+  );
+}
+
+function ScenarioCard({ s }: { s: Scenario }) {
+  return (
+    <article className="card scenario">
+      <p className="eyebrow">Common call</p>
+      <h2>{s.title}</h2>
+      <p>{s.situation}</p>
+      <h3>What the rules say</h3>
+      <ul>
+        {s.rules.map((r) => (
+          <li key={r.ref}>
+            <strong>{r.ref}</strong> {r.says}
+          </li>
+        ))}
+      </ul>
+      {s.precedent.length > 0 && (
+        <>
+          <h3>Precedent</h3>
+          <ul>
+            {s.precedent.map((p) => (
+              <li key={p.source}>
+                <strong>{p.source}:</strong> {p.says}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {s.readings.length > 0 && (
+        <>
+          <h3>Both sides</h3>
+          <ul>
+            {s.readings.map((r) => (
+              <li key={r.label}>
+                <strong>{r.label}:</strong> {r.argument}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <div className="best-call">
+        <h3>
+          Best call <span className={`tag confidence-${s.confidence.toLowerCase()}`}>{s.confidence} confidence</span>
+        </h3>
+        <p>{s.best_call}</p>
+      </div>
+    </article>
   );
 }
