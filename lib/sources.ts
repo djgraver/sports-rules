@@ -161,6 +161,8 @@ export const SPORTS: Sport[] = [
         kind: "rules",
         urls: ["https://www.worldskate.org/inline-hockey/about/regulations.html?download=9047:inline-hockey-rulebook-2027"],
         officialPage: "https://www.worldskate.org/inline-hockey/about/regulations.html",
+        // Annex C (page 80 on) is a penalty index table.
+        lastPage: 79,
         headings: {
           section: /^(\d{1,2}\.\d{1,2}(?:\.\d{1,2})?)\.?\s+([A-Z].{2,80})$/,
           implicitRules: true,

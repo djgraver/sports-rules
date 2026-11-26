@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildIndex, searchRules } from "../lib/search.ts";
+import { buildIndex, lookup, searchRules } from "../lib/search.ts";
 import type { RuleChunk, SportIndexFile } from "../lib/types.ts";
 
 const chunk = (id: string, ref: string, section: string, text: string): RuleChunk => ({
@@ -43,4 +43,36 @@ test("identical wording from two rulebooks is shown once", () => {
   };
   const res = searchRules(buildIndex(file), ["closing hand puck"]);
   assert.equal(res.filter((c) => c.ref.endsWith("6.4.20")).length, 1);
+});
+
+test("rule headings rank above rules that only mention the words", () => {
+  const file: SportIndexFile = {
+    sport: "soccer", generatedAt: "", documents: [],
+    chunks: [
+      { ...chunk("a", "Rule 6.4.20", "Handling Puck with Hand", "a player who closes the hand on the puck after a high stick"), title: "Penalties" },
+      { ...chunk("b", "Rule 6.4.21", "High Sticks", "carrying the stick above the shoulder"), title: "Penalties" },
+    ],
+  };
+  assert.equal(lookup(buildIndex(file), "high stick")[0].ref, "Rule 6.4.21");
+});
+
+test("typing a rule number jumps to that rule and its parts", () => {
+  const file: SportIndexFile = {
+    sport: "soccer", generatedAt: "", documents: [],
+    chunks: [
+      chunk("a", "Law 12.1", "Direct free kick", "x y z"),
+      chunk("b", "Law 12.2", "Indirect free kick", "x y z"),
+      chunk("c", "Law 1.2", "Field markings", "12 lines"),
+    ],
+  };
+  assert.deepEqual(lookup(buildIndex(file), "Law 12").map((c) => c.ref), ["Law 12.1", "Law 12.2"]);
+  assert.deepEqual(lookup(buildIndex(file), "12.2").map((c) => c.ref), ["Law 12.2"]);
+});
+
+test("filler words don't match everything", () => {
+  const file: SportIndexFile = {
+    sport: "soccer", generatedAt: "", documents: [],
+    chunks: [chunk("a", "Law 1", "Field", "is a and the it in an")],
+  };
+  assert.deepEqual(lookup(buildIndex(file), "is it a"), []);
 });
