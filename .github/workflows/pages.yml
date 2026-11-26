@@ -19,11 +19,33 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Secrets can't be used in step conditions directly, so expose whether they're set.
+      HAS_DEPLOY_KEY: ${{ secrets.RULES_DATA_DEPLOY_KEY != '' }}
+      HAS_TOKEN: ${{ secrets.RULES_DATA_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
-      # Parsed rulebooks live in a private repo; RULES_DATA_TOKEN is a fine-grained
-      # token with read-only Contents access to it.
-      - uses: actions/checkout@v4
+      # Parsed rulebooks live in the private djgraver/sports-rules-data repo. Access is via
+      # either secret:
+      #   RULES_DATA_DEPLOY_KEY  private half of a read-only deploy key added to that repo (preferred)
+      #   RULES_DATA_TOKEN       fine-grained token with read-only Contents access to it
+      - name: Check data repo credentials
+        run: |
+          if [ "$HAS_DEPLOY_KEY" != "true" ] && [ "$HAS_TOKEN" != "true" ]; then
+            echo "::error::Add RULES_DATA_DEPLOY_KEY (or RULES_DATA_TOKEN) as an Actions secret so the build can read djgraver/sports-rules-data."
+            exit 1
+          fi
+      - name: Check out rulebook data (deploy key)
+        if: env.HAS_DEPLOY_KEY == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: djgraver/sports-rules-data
+          ssh-key: ${{ secrets.RULES_DATA_DEPLOY_KEY }}
+          path: data
+          sparse-checkout: rules
+      - name: Check out rulebook data (token)
+        if: env.HAS_DEPLOY_KEY != 'true'
+        uses: actions/checkout@v4
         with:
           repository: djgraver/sports-rules-data
           token: ${{ secrets.RULES_DATA_TOKEN }}
