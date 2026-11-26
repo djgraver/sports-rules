@@ -15,6 +15,13 @@ export interface HeadingRules {
   knownTitles?: string[];
   /** Sub-section heading. Groups: 1 = number, 2 = title. */
   section?: RegExp;
+  /**
+   * Numbered clauses ("8. Play restarts from…"): each starts a new chunk with ref
+   * <rule>.<clause>, and the clause text stays in the body. Groups: 1 = number, 2 = rest of line.
+   */
+  clause?: RegExp;
+  /** Un-numbered sub-headings (e.g. all-caps lines) used as the section title for following clauses. */
+  subheading?: RegExp;
   /** Deepest section numbering to treat as a heading: 1 = "25.7", 2 = "25.7.1" (default 2). */
   sectionDepth?: number;
   /** No separate rule headings: the rule number is the first part of each section number. */
@@ -117,8 +124,10 @@ export const SPORTS: Sport[] = [
         ],
         officialPage: "https://www.iihf.com/en/statichub/4719/rules-and-regulations",
         headings: {
-          rule: /^RULE\s+(\d{1,3})\s*[-–—|:]?\s*(.{2,80})$/i,
-          section: /^(\d{1,3}\.\d{1,2})\.?\s+(.{2,80})$/,
+          rule: /^RULE\s+(\d{1,3})\.?\s*(?:[-–—|:]\s*)?(.{0,80})$/i,
+          section: /^(\d{1,3}\.\d{1,2})\.?\s+([A-Z].{2,80})$/,
+          sectionDepth: 1,
+          footer: /^IIHFOFFICIALRULEBOOK/i,
           refPrefix: "Rule",
         },
       },
@@ -135,8 +144,9 @@ export const SPORTS: Sport[] = [
         urls: ["https://www.worldskate.org/inline-hockey/about/regulations.html?download=9047:inline-hockey-rulebook-2027"],
         officialPage: "https://www.worldskate.org/inline-hockey/about/regulations.html",
         headings: {
-          rule: /^RULE\s+(\d{1,3})\s*[-–—|:]?\s*(.{2,80})$/i,
-          section: /^(\d{1,3}\.\d{1,2})\.?\s+(.{2,80})$/,
+          section: /^(\d{1,2}\.\d{1,2}(?:\.\d{1,2})?)\.?\s+([A-Z].{2,80})$/,
+          implicitRules: true,
+          footer: /^RULEBOOKINLINEHOCKEY|^WORLDSKATE$/i,
           refPrefix: "Rule",
         },
       },
@@ -154,14 +164,93 @@ export const SPORTS: Sport[] = [
         officialPage: "https://www.lords.org/mcc/the-laws-of-cricket",
         headings: {
           knownTitles: MCC_LAWS,
-          section: /^(\d{1,2}\.\d{1,2}(?:\.\d{1,2})?)\s+([A-Z].{2,80})$/,
-          footer: /^TheLawsofCricket2017Code|^Page\|?\d+$/i,
+          section: /^(\d{1,2}\.\d{1,2})\s+([A-Z].{2,80})$/,
+          sectionDepth: 1,
+          footer: /^TheLawsofCricket2017Code|^Page\|?\d+$|^\(?DIGLOT/i,
+          refPrefix: "Law",
+        },
+      },
+    ],
+  },
+  {
+    id: "netball",
+    name: "Netball",
+    governingBodies: "World Netball Rules of Netball, used by Netball Australia",
+    docs: [
+      {
+        // World Netball sells the current edition and publishes it in its app; no free
+        // official PDF is linked from netball.sport. This is a member association's copy
+        // of the 2024 edition. Replace it if Netball Australia publishes a direct link.
+        name: "World Netball Rules of Netball (2024 edition)",
+        kind: "rules",
+        urls: ["https://netballhamilton.org.nz/media/1997/world-netball-rules-book-2024.pdf"],
+        officialPage: "https://netball.com.au/rules-netball",
+        headings: {
+          rule: /^RULE\s+(\d{1,2})\s*:\s*(.{2,80})$/,
+          clause: /^(\d{1,2})\.(?:\s+(.*))?$/,
+          subheading: /^[A-Z][A-Z0-9 ,'’/&()-]{3,70}$/,
+          refPrefix: "Rule",
+        },
+      },
+    ],
+  },
+  {
+    id: "basketball",
+    name: "Basketball",
+    governingBodies: "FIBA Official Basketball Rules, used by Basketball Australia",
+    docs: [
+      {
+        name: "FIBA Official Basketball Rules 2026",
+        kind: "rules",
+        urls: ["https://assets.fiba.basketball/image/upload/documents-corporate-fiba-official-rules-2026-v1-0.pdf"],
+        officialPage: "https://refereeing.fiba.basketball/en/rules",
+        headings: {
+          rule: /^Art(?:icle|\.)\s*(\d{1,2})\.?\s*(?:[-–—:]\s*)?(.{0,80})$/i,
+          section: /^(\d{1,2}\.\d{1,2})\.?\s+([A-Z].{2,80})$/,
+          sectionDepth: 1,
+          refPrefix: "Art.",
+        },
+      },
+      {
+        // Official rulings on specific situations: the basketball "casebook".
+        name: "FIBA Official Basketball Rules Interpretations 2024",
+        kind: "casebook",
+        urls: ["https://assets.fiba.basketball/image/upload/documents-corporate-fiba-official-rules-2024-obri-v10a.pdf"],
+        officialPage: "https://refereeing.fiba.basketball/en/rules",
+        headings: {
+          rule: /^Art(?:icle|\.)\s*(\d{1,2})\.?\s*(?:[-–—:]\s*)?(.{0,80})$/i,
+          section: /^(\d{1,2}-\d{1,3})\s+(.{2,80})$/,
+          refPrefix: "OBRI",
+        },
+      },
+    ],
+  },
+  {
+    id: "afl",
+    name: "Australian rules football (AFL)",
+    governingBodies: "Laws of Australian Football, AFL",
+    docs: [
+      {
+        name: "Laws of Australian Football 2026",
+        kind: "rules",
+        urls: ["https://play.afl/sites/default/files/2026-02/Laws%20of%20Australian%20Football%202026.pdf"],
+        officialPage: "https://www.afl.com.au/clubhelp/match-day-management/policies/laws-of-australian-football",
+        headings: {
+          rule: /^LAW\s+(\d{1,2})\.?\s*(?:[-–—:]\s*)?(.{0,80})$/i,
+          section: /^(\d{1,2}\.\d{1,2})\.?\s+([A-Z].{2,80})$/,
+          sectionDepth: 1,
+          implicitRules: true,
           refPrefix: "Law",
         },
       },
     ],
   },
 ];
+
+/** Shown first and selected by default until the user picks their own default. */
+export const DEFAULT_SPORT: SportId = "inline-hockey";
+
+SPORTS.sort((a, b) => (a.id === DEFAULT_SPORT ? -1 : b.id === DEFAULT_SPORT ? 1 : 0));
 
 export function getSport(id: string): Sport | undefined {
   return SPORTS.find((s) => s.id === id);

@@ -4,9 +4,15 @@ import { z } from "zod";
 import type { Sport } from "./sources.ts";
 import type { RuleChunk } from "./types.ts";
 
-export const MODEL = process.env.CLAUDE_MODEL || "claude-opus-5-5";
+export const DEFAULT_MODEL = "claude-opus-5-5";
 
-const client = new Anthropic();
+/**
+ * The app is a static site, so it calls the Anthropic API straight from the
+ * browser with a key the user provides (kept in their browser only).
+ */
+export function makeClient(apiKey: string): Anthropic {
+  return new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+}
 
 const SearchPlan = z.object({
   searches: z
@@ -18,9 +24,9 @@ const SearchPlan = z.object({
  * Turns a casual question ("can the keeper pick up a back pass?") into searches
  * using rulebook wording ("goalkeeper handles ball deliberately kicked by team-mate").
  */
-export async function planSearches(sport: Sport, question: string): Promise<string[]> {
+export async function planSearches(client: Anthropic, sport: Sport, question: string, model = DEFAULT_MODEL): Promise<string[]> {
   const res = await client.messages.parse({
-    model: MODEL,
+    model,
     max_tokens: 2000,
     output_config: { effort: "low", format: zodOutputFormat(SearchPlan) },
     system:
@@ -65,9 +71,15 @@ function formatExcerpts(chunks: RuleChunk[]): string {
 }
 
 /** Streams the Markdown answer. Yields text fragments as they arrive. */
-export async function* streamAnswer(sport: Sport, question: string, chunks: RuleChunk[]): AsyncGenerator<string> {
+export async function* streamAnswer(
+  client: Anthropic,
+  sport: Sport,
+  question: string,
+  chunks: RuleChunk[],
+  model = DEFAULT_MODEL,
+): AsyncGenerator<string> {
   const stream = client.beta.messages.stream({
-    model: MODEL,
+    model,
     max_tokens: 16000,
     output_config: { effort: "medium" },
     // If a safety classifier declines, retry on a fallback model chosen by the API.

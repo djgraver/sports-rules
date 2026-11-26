@@ -13,30 +13,45 @@ Ask about a situation from your game and you get:
 
 | Sport | Rulebook | Used in Australia by |
 |---|---|---|
-| Soccer | IFAB Laws of the Game 2026/27 | Football Australia |
+| Inline hockey (default) | World Skate Inline Hockey Rulebook 2027 | Skate Australia |
 | Ice hockey | IIHF Rule Book 2026-27 | Ice Hockey Australia |
-| Inline hockey | World Skate Inline Hockey Rulebook 2027 | Skate Australia |
+| Soccer | IFAB Laws of the Game 2026/27 | Football Australia |
 | Cricket | MCC Laws of Cricket (2017 Code, 3rd Ed. 2022) | Cricket Australia (club cricket) |
+| Netball | World Netball Rules of Netball (2024 ed.) | Netball Australia |
+| Basketball | FIBA Official Basketball Rules 2026 + Official Interpretations 2024 | Basketball Australia |
+| AFL | Laws of Australian Football 2026 | AFL |
+
+Users can make any sport their default (saved in their browser).
 
 Source URLs and heading patterns live in [`lib/sources.ts`](lib/sources.ts).
 
 ## How it works
 
-1. **Ingest** (`npm run ingest`): downloads each PDF from the governing body, extracts text with `pdftotext`, and splits it into numbered rule sections (`lib/split.ts`). Output goes to `data/rules/<sport>.json`. A GitHub Action re-runs this monthly and opens a PR when a rulebook changes.
-2. **Search** (`lib/search.ts`): BM25 keyword search (MiniSearch) over the rule sections.
-3. **Answer** (`lib/answer.ts`): Claude first rewrites the question into rulebook vocabulary ("keeper" → "goalkeeper", "back pass" → "deliberately kicked by a team-mate"), the app searches with those terms, then Claude writes the answer from the matching rules only, citing rule numbers.
+1. **Ingest** (`npm run ingest`): downloads each PDF from the governing body, extracts text with `pdftotext`, and splits it into numbered rule sections (`lib/split.ts`). The results (original PDFs, full plain text and parsed `rules/<sport>.json`) are stored in the private `djgraver/sports-rules-data` repo, whose own workflow runs this code and checks for new editions monthly.
+2. **Search** (`lib/search.ts`): BM25 keyword search (MiniSearch) over the rule sections, run in the browser.
+3. **Answer** (`lib/answer.ts`): called from the browser with the user's own Anthropic API key (entered under Settings, stored only in that browser). Without a key the app still searches the rules. Claude first rewrites the question into rulebook vocabulary ("keeper" → "goalkeeper", "back pass" → "deliberately kicked by a team-mate"), the app searches with those terms, then Claude writes the answer from the matching rules only, citing rule numbers.
 
 ## Running locally
 
 ```bash
 npm install
-cp .env.example .env.local   # add your ANTHROPIC_API_KEY
-sudo apt-get install poppler-utils   # or: brew install poppler
-npm run ingest
+git clone https://github.com/djgraver/sports-rules-data data   # private: rulebook data
 npm run dev
 ```
 
-Deploy on Vercel: import the repo and set `ANTHROPIC_API_KEY`. The parsed rulebooks in `data/rules/` ship with the app.
+## Hosting
+
+The app is a static site deployed to GitHub Pages by `.github/workflows/pages.yml` on every push to `main`. One-time setup:
+
+1. In this repo's **Settings → Pages**, set **Source** to **GitHub Actions**.
+2. Give the build read access to the private data repo with a deploy key:
+   - Generate a key pair: `ssh-keygen -t ed25519 -N "" -C "sports-rules pages" -f rules_data_key`
+   - In **sports-rules-data → Settings → Deploy keys → Add deploy key**, paste `rules_data_key.pub` and leave "Allow write access" unticked.
+   - In **sports-rules → Settings → Secrets and variables → Actions**, add a secret `RULES_DATA_DEPLOY_KEY` containing the whole of `rules_data_key` (the private key).
+
+   (A fine-grained token with read-only Contents access, saved as `RULES_DATA_TOKEN`, works too.)
+
+ The site is then at `https://<user>.github.io/sports-rules/` and can be added to a phone's home screen or wrapped with Hermit.
 
 ## Copyright
 
