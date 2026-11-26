@@ -36,10 +36,8 @@ mkdirSync(OUT, { recursive: true });
 mkdirSync(TEXT, { recursive: true });
 
 async function download(doc: SourceDoc, file: string): Promise<{ bytes: Buffer; url: string }> {
-  if (offline) {
-    if (!existsSync(file)) throw new Error(`--offline but ${file} is missing`);
-    return { bytes: readFileSync(file), url: doc.urls[0] };
-  }
+  // Offline runs reuse stored PDFs and only download documents that were never fetched.
+  if (offline && existsSync(file)) return { bytes: readFileSync(file), url: doc.urls[0] };
   const errors: string[] = [];
   for (const url of doc.urls) {
     try {
@@ -89,6 +87,7 @@ for (const sport of SPORTS) {
         headings: doc.headings,
         pages,
         firstPage: doc.firstPage,
+        lastPage: doc.lastPage,
       });
       const slugName = doc.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
       writeFileSync(

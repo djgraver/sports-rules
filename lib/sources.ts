@@ -43,6 +43,8 @@ export interface SourceDoc {
   headings: HeadingRules;
   /** Skip pages before this (cover, contents, foreword). 1-based. */
   firstPage?: number;
+  /** Ignore pages after this (penalty index tables and the like). 1-based. */
+  lastPage?: number;
 }
 
 export interface Sport {
@@ -136,8 +138,24 @@ export const SPORTS: Sport[] = [
   {
     id: "inline-hockey",
     name: "Inline hockey",
-    governingBodies: "World Skate Inline Hockey Rulebook, used by Skate Australia",
+    governingBodies: "Inline Hockey Australia Rulebook (Skate Australia), with the World Skate rulebook it's adapted from",
     docs: [
+      // Australia's own rulebook, adapted from World Skate's with ambiguous rules reworded and
+      // Australia-only rules boxed. Listed first so its wording is preferred where both books say the same thing.
+      {
+        name: "Inline Hockey Australia Rulebook 2021",
+        kind: "rules",
+        urls: ["https://www.skateaustralia.org.au/_files/ugd/0a3a54_680c6ed0c9d9498886b18599fdb5714c.pdf"],
+        officialPage: "https://www.skateaustralia.org.au/inline-hockey",
+        // Annex C (page 53 on) is a penalty index table.
+        lastPage: 52,
+        headings: {
+          section: /^(\d{1,2}\.\d{1,2}(?:\.\d{1,2})?)\.?\s+([A-Z].{2,80})$/,
+          implicitRules: true,
+          footer: /^INLINEHOCKEYAUSTRALIA/i,
+          refPrefix: "Rule",
+        },
+      },
       {
         name: "World Skate Inline Hockey Rulebook 2027",
         kind: "rules",
@@ -147,7 +165,7 @@ export const SPORTS: Sport[] = [
           section: /^(\d{1,2}\.\d{1,2}(?:\.\d{1,2})?)\.?\s+([A-Z].{2,80})$/,
           implicitRules: true,
           footer: /^RULEBOOKINLINEHOCKEY|^WORLDSKATE$/i,
-          refPrefix: "Rule",
+          refPrefix: "World Skate",
         },
       },
     ],

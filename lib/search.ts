@@ -40,11 +40,19 @@ export function searchRules(loaded: LoadedSport, queries: string[], limit = 12):
       scores.set(String(r.id), (scores.get(String(r.id)) ?? 0) + r.score / top);
     });
   }
-  return [...scores.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([id]) => loaded.byId.get(id)!)
-    .filter(Boolean);
+  // A national rulebook adapted from an international one repeats most rules word for word.
+  // Show each wording once, at the better rank, using the copy from the document listed first.
+  const docOrder = new Map(loaded.file.documents.map((d, i) => [d.source, i]));
+  const order = (c: RuleChunk) => docOrder.get(c.source) ?? 99;
+  const byText = new Map<string, RuleChunk>();
+  for (const [id] of [...scores.entries()].sort((a, b) => b[1] - a[1])) {
+    const c = loaded.byId.get(id);
+    if (!c) continue;
+    const key = c.text.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 300);
+    const kept = byText.get(key);
+    if (!kept || order(c) < order(kept)) byText.set(key, c);
+  }
+  return [...byText.values()].slice(0, limit);
 }
 
 export interface LoadedScenarios {

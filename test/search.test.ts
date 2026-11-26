@@ -31,3 +31,16 @@ test("duplicate ids in old data files are renamed, not dropped", () => {
   const loaded = buildIndex(file);
   assert.equal(loaded.byId.size, 2);
 });
+
+test("identical wording from two rulebooks is shown once", () => {
+  const file: SportIndexFile = {
+    sport: "soccer", generatedAt: "", documents: [],
+    chunks: [
+      chunk("a", "Rule 6.4.20", "Hand", "closing the hand on the puck is a minor penalty"),
+      chunk("b", "World Skate 6.4.20", "Hand", "Closing the hand on the puck is a minor penalty."),
+      chunk("c", "Rule 6.4.21", "High sticks", "batting the puck with a high stick"),
+    ],
+  };
+  const res = searchRules(buildIndex(file), ["closing hand puck"]);
+  assert.equal(res.filter((c) => c.ref.endsWith("6.4.20")).length, 1);
+});

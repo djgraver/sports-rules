@@ -12,6 +12,8 @@ export interface SplitInput {
   /** Text of each PDF page, in order (index 0 = page 1). */
   pages: string[];
   firstPage?: number;
+  /** Ignore pages after this (e.g. penalty tables that would be misread as rules). 1-based. */
+  lastPage?: number;
 }
 
 export interface SplitResult {
@@ -150,7 +152,7 @@ export function splitRulebook(input: SplitInput): SplitResult {
     }
   };
 
-  for (let p = (input.firstPage ?? 1) - 1; p < input.pages.length; p++) {
+  for (let p = (input.firstPage ?? 1) - 1; p < Math.min(input.pages.length, input.lastPage ?? Infinity); p++) {
     const pageNo = p + 1;
     const lines = cleanPage(input.pages[p]).split("\n");
     for (let li = 0; li < lines.length; li++) {
