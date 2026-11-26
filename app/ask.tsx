@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { makeClient, planSearches, streamAnswer } from "@/lib/answer.ts";
-import { buildIndex, buildScenarioIndex, searchRules, searchScenarios, type LoadedScenarios, type LoadedSport } from "@/lib/search.ts";
+import { buildIndex, lookup, queryTerms, searchRules, type LoadedSport } from "@/lib/search.ts";
 import { getSport } from "@/lib/sources.ts";
 import type { RuleChunk, Scenario, ScenarioFile, SportIndexFile } from "@/lib/types.ts";
 
@@ -17,13 +17,13 @@ export interface SportOption {
 }
 
 const EXAMPLES: Record<string, string> = {
-  "inline-hockey": "A defender closed his hand on the puck and dropped it to his own stick. Is that a penalty?",
-  "ice-hockey": "A player's stick broke and he kept playing with the shaft. What's the call?",
-  soccer: "Our keeper picked up the ball after a defender headed it back to him. Is that a free kick?",
-  cricket: "The ball hit the helmet lying behind the keeper. What happens?",
-  netball: "The goal attack caught a rebound with one foot over the circle line. Can she shoot?",
-  basketball: "A player caught the ball, landed on one foot, then jumped off it and landed on both. Travel?",
-  afl: "A player marked the ball but it touched an opponent's fingertips first. Is it still a mark?",
+  "inline-hockey": "high stick, hand pass, 6.4.20",
+  "ice-hockey": "icing, goal crease, Rule 69",
+  soccer: "offside, handball, Law 12",
+  cricket: "wide, LBW, Law 28",
+  netball: "footwork, contact, Rule 13",
+  basketball: "travelling, goaltending, Art. 25",
+  afl: "holding the ball, 50 metre penalty, Law 18",
 };
 
 const KEY_STORAGE = "rulesref.anthropicKey";
@@ -46,16 +46,17 @@ export default function Ask({ sports, defaultSport, basePath }: { sports: SportO
   const [myDefault, setMyDefault] = useState(defaultSport);
   const [apiKey, setApiKey] = useState("");
   const [showSettings, setShowSettings] = useState(false);
-  const [question, setQuestion] = useState("");
+  const [query, setQuery] = useState("");
+  const [loaded, setLoaded] = useState<LoadedSport | null>(null);
+  const [results, setResults] = useState<RuleChunk[]>([]);
+  const [open, setOpen] = useState<Set<string>>(new Set());
   const [answer, setAnswer] = useState("");
-  const [sources, setSources] = useState<RuleChunk[]>([]);
-  const [matches, setMatches] = useState<Scenario[]>([]);
-  const [searched, setSearched] = useState(false);
-  const [browse, setBrowse] = useState<Scenario[] | null>(null);
+  const [consulted, setConsulted] = useState<RuleChunk[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [browse, setBrowse] = useState<Scenario[] | null>(null);
+  const [picked, setPicked] = useState<Scenario | null>(null);
   const indexes = useRef(new Map<string, LoadedSport>());
-  const scenarioIndexes = useRef(new Map<string, LoadedScenarios | null>());
   const current = sports.find((s) => s.id === sport)!;
 
   // Restore this browser's settings.
@@ -68,68 +69,73 @@ export default function Ask({ sports, defaultSport, basePath }: { sports: SportO
     }
   }, [sports]);
 
-  async function loadIndex(id: string): Promise<LoadedSport> {
-    const cached = indexes.current.get(id);
-    if (cached) return cached;
-    const res = await fetch(`${basePath}/rules/${id}.json`);
-    if (!res.ok) throw new Error("Couldn't load that rulebook.");
-    const loaded = buildIndex((await res.json()) as SportIndexFile);
-    indexes.current.set(id, loaded);
-    return loaded;
-  }
-
-  async function loadScenarios(id: string): Promise<LoadedScenarios | null> {
-    if (scenarioIndexes.current.has(id)) return scenarioIndexes.current.get(id)!;
-    let loaded: LoadedScenarios | null = null;
-    try {
-      const res = await fetch(`${basePath}/scenarios/${id}.json`);
-      if (res.ok) loaded = buildScenarioIndex((await res.json()) as ScenarioFile);
-    } catch {
-      // No scenarios for this sport: rules search still works.
-    }
-    scenarioIndexes.current.set(id, loaded);
-    return loaded;
-  }
-
-  // Changing sport clears the previous sport's results.
+  // Load the rulebook as soon as a sport is picked, so results appear while typing.
   useEffect(() => {
+    let cancelled = false;
+    setLoaded(null);
     setAnswer("");
-    setSources([]);
-    setMatches([]);
-    setSearched(false);
+    setConsulted([]);
     setBrowse(null);
-  }, [sport]);
+    setPicked(null);
+    setError("");
+    const cached = indexes.current.get(sport);
+    if (cached) {
+      setLoaded(cached);
+      return;
+    }
+    if (!current.loaded) return;
+    fetch(`${basePath}/rules/${sport}.json`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Couldn't load that rulebook.");
+        return res.json() as Promise<SportIndexFile>;
+      })
+      .then((data) => {
+        const idx = buildIndex(data);
+        indexes.current.set(sport, idx);
+        if (!cancelled) setLoaded(idx);
+      })
+      .catch((err: Error) => !cancelled && setError(err.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [sport, basePath, current.loaded]);
+
+  // Search as you type.
+  useEffect(() => {
+    if (!loaded) return;
+    const t = setTimeout(() => {
+      setResults(query.trim() ? lookup(loaded, query, 25) : []);
+      setOpen(new Set());
+    }, 120);
+    return () => clearTimeout(t);
+  }, [query, loaded]);
 
   async function toggleBrowse() {
     if (browse) return setBrowse(null);
-    const loaded = await loadScenarios(sport);
-    setBrowse(loaded?.file.scenarios ?? []);
+    setPicked(null);
+    try {
+      const res = await fetch(`${basePath}/scenarios/${sport}.json`);
+      setBrowse(res.ok ? ((await res.json()) as ScenarioFile).scenarios : []);
+    } catch {
+      setBrowse([]);
+    }
   }
 
-  async function ask(e: React.FormEvent) {
+  // Optional, needs a paid API key: a written answer built from the matching rules.
+  async function askAi(e: React.FormEvent) {
     e.preventDefault();
-    const q = question.trim();
+    const q = query.trim();
     const info = getSport(sport);
-    if (!q || busy || !info) return;
+    if (!q || busy || !info || !loaded || !apiKey) return;
     setBusy(true);
     setAnswer("");
-    setSources([]);
-    setMatches([]);
-    setBrowse(null);
+    setConsulted([]);
     setError("");
     try {
-      const [loaded, scenarios] = await Promise.all([loadIndex(sport), loadScenarios(sport)]);
-      setMatches(scenarios ? searchScenarios(scenarios, q) : []);
-      setSearched(true);
-      if (!apiKey) {
-        // No key: plain keyword search over the rulebook.
-        setSources(searchRules(loaded, [q], 8));
-        return;
-      }
       const client = makeClient(apiKey);
       const searches = await planSearches(client, info, q);
       const chunks = searchRules(loaded, searches, 12);
-      setSources(chunks);
+      setConsulted(chunks);
       let text = "";
       for await (const part of streamAnswer(client, info, q, chunks)) {
         text += part;
@@ -150,13 +156,15 @@ export default function Ask({ sports, defaultSport, basePath }: { sports: SportO
   }
 
   const pdfUrl = (c: RuleChunk) => {
-    const doc = indexes.current.get(c.sport)?.file.documents.find((d) => d.source === c.source);
+    const doc = loaded?.file.documents.find((d) => d.source === c.source);
     return doc ? `${doc.url}#page=${c.page}` : undefined;
   };
+  const terms = useMemo(() => queryTerms(query), [query]);
+  const primarySource = loaded?.file.documents[0]?.source;
 
   return (
     <section>
-      <form onSubmit={ask} className="card">
+      <form onSubmit={askAi} className="card">
         <div className="row">
           <label htmlFor="sport">Sport</label>
           <button type="button" className="link" onClick={() => setShowSettings((v) => !v)}>
@@ -193,8 +201,8 @@ export default function Ask({ sports, defaultSport, basePath }: { sports: SportO
         {showSettings && (
           <div className="settings">
             <p>
-              <strong>Optional: AI answers.</strong> Paste an Anthropic API key to get a written answer for situations
-              the common calls don&apos;t cover. Anthropic charges for each question, billed to your key.
+              <strong>Optional: AI answers.</strong> Paste an Anthropic API key to get a written answer to a question
+              about a situation. Anthropic charges for each question, billed to your key.
             </p>
             <label htmlFor="key">Anthropic API key (paid)</label>
             <input
@@ -206,26 +214,25 @@ export default function Ask({ sports, defaultSport, basePath }: { sports: SportO
               onChange={(e) => setApiKey(e.target.value.trim())}
               onBlur={() => store(KEY_STORAGE, apiKey)}
             />
-            <p className="muted">
-              Stored only in this browser and sent only to Anthropic. Everything else in the app works without it.
-            </p>
+            <p className="muted">Stored only in this browser and sent only to Anthropic. Everything else in the app works without it.</p>
           </div>
         )}
 
-        <label htmlFor="q">What happened?</label>
-        <textarea
+        <label htmlFor="q">Search the rules</label>
+        <input
           id="q"
-          rows={4}
-          value={question}
-          placeholder={EXAMPLES[sport]}
-          onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) ask(e);
-          }}
+          type="search"
+          enterKeyHint="search"
+          autoComplete="off"
+          value={query}
+          placeholder={`e.g. ${EXAMPLES[sport] ?? "a rule name or number"}`}
+          onChange={(e) => setQuery(e.target.value)}
         />
-        <button type="submit" disabled={busy || !question.trim() || !current.loaded}>
-          {busy ? "Checking the rulebook…" : apiKey ? "Ask (AI answer)" : "Find the call"}
-        </button>
+        {apiKey && (
+          <button type="submit" disabled={busy || !query.trim() || !loaded}>
+            {busy ? "Checking the rulebook…" : "Ask AI about this situation"}
+          </button>
+        )}
         {current.scenarioCount > 0 && (
           <button type="button" className="link browse" onClick={toggleBrowse}>
             {browse ? "Hide common calls" : `Browse ${current.scenarioCount} common calls for ${current.name}`}
@@ -233,13 +240,22 @@ export default function Ask({ sports, defaultSport, basePath }: { sports: SportO
         )}
       </form>
 
+      {error && <p className="error">{error}</p>}
+
       {browse && (
         <section className="card">
           <h2>Common calls: {current.name}</h2>
           <ul className="browse-list">
             {browse.map((s) => (
               <li key={s.id}>
-                <button type="button" className="link" onClick={() => { setMatches([s]); setBrowse(null); setSearched(true); setSources([]); setAnswer(""); }}>
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() => {
+                    setPicked(s);
+                    setBrowse(null);
+                  }}
+                >
                   {s.title}
                 </button>
               </li>
@@ -247,55 +263,87 @@ export default function Ask({ sports, defaultSport, basePath }: { sports: SportO
           </ul>
         </section>
       )}
+      {picked && <ScenarioCard s={picked} />}
 
-      {matches.map((s) => (
-        <ScenarioCard key={s.id} s={s} />
-      ))}
-
-      {searched && !busy && matches.length === 0 && current.scenarioCount > 0 && sources.length > 0 && (
-        <p className="muted">No common call matches that exactly. Here are the closest rules.</p>
-      )}
-
-      {error && <p className="error">{error}</p>}
-
-      {(answer || (busy && sources.length > 0)) && (
+      {(answer || busy) && (
         <article className="card answer">
           <ReactMarkdown>{answer || "_Thinking…_"}</ReactMarkdown>
+          {consulted.length > 0 && <p className="muted">Based on {consulted.map((c) => c.ref).filter(Boolean).join(", ")}.</p>}
         </article>
       )}
 
-      {!apiKey && sources.length > 0 && !busy && (
-        <p className="muted">Want a written answer for something unusual? AI answers are an optional paid extra in Settings.</p>
-      )}
-
-      {sources.length > 0 && (
-        <details className="card" open={!apiKey && matches.length === 0}>
-          <summary>{apiKey ? "Rules consulted" : "Matching rules"} ({sources.length})</summary>
-          <ol className="sources">
-            {sources.map((s) => (
-              <li key={s.id}>
-                <strong>{s.ref || s.title}</strong>
-                {s.ref && s.title ? ` ${s.title}` : ""}
-                {s.section && s.section !== s.title ? ` · ${s.section}` : ""}
-                {s.kind === "casebook" && <span className="tag">official ruling</span>}
-                <div className="muted">
-                  {s.source}, page {s.page}
-                  {pdfUrl(s) && (
-                    <>
-                      {" · "}
-                      <a href={pdfUrl(s)} target="_blank" rel="noreferrer">
-                        open PDF
-                      </a>
-                    </>
-                  )}
-                </div>
-                <p>{s.text.length > 500 ? s.text.slice(0, 500) + "…" : s.text}</p>
-              </li>
-            ))}
-          </ol>
-        </details>
+      {query.trim() && loaded && (
+        <section className="results">
+          {results.length === 0 ? (
+            <p className="muted">No rules mention that. Try a different word, or the rule number.</p>
+          ) : (
+            <ol className="hits">
+              {results.map((c) => {
+                const isOpen = open.has(c.id);
+                return (
+                  <li key={c.id} className="card hit">
+                    <button
+                      type="button"
+                      className="hit-head"
+                      aria-expanded={isOpen}
+                      onClick={() =>
+                        setOpen((prev) => {
+                          const next = new Set(prev);
+                          if (isOpen) next.delete(c.id);
+                          else next.add(c.id);
+                          return next;
+                        })
+                      }
+                    >
+                      <span className="hit-ref">{c.ref || "Section"}</span>
+                      <span className="hit-title">
+                        <Highlight text={c.section && c.section !== c.title ? c.section : c.title} terms={terms} />
+                        {c.section && c.section !== c.title && <span className="muted"> · {c.title}</span>}
+                      </span>
+                    </button>
+                    <p className="hit-text">
+                      <Highlight text={isOpen ? c.text : snippet(c.text, terms)} terms={terms} />
+                    </p>
+                    <div className="muted hit-meta">
+                      {c.kind === "casebook" && <span className="tag">official ruling</span>}
+                      {c.source !== primarySource && <span>{c.source} · </span>}
+                      page {c.page}
+                      {pdfUrl(c) && (
+                        <>
+                          {" · "}
+                          <a href={pdfUrl(c)} target="_blank" rel="noreferrer">
+                            open PDF
+                          </a>
+                        </>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </section>
       )}
     </section>
+  );
+}
+
+/** About 220 characters of rule text around the first search word. */
+function snippet(text: string, terms: string[]): string {
+  const lower = text.toLowerCase();
+  const at = terms.map((t) => lower.indexOf(t)).filter((i) => i >= 0).sort((a, b) => a - b)[0] ?? 0;
+  const start = Math.max(0, lower.lastIndexOf(" ", Math.max(0, at - 60)));
+  const end = Math.min(text.length, start + 220);
+  return `${start > 0 ? "…" : ""}${text.slice(start, end).trim()}${end < text.length ? "…" : ""}`;
+}
+
+function Highlight({ text, terms }: { text: string; terms: string[] }) {
+  if (!terms.length || !text) return <>{text}</>;
+  const rx = new RegExp(`\\b(${terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "gi");
+  return (
+    <>
+      {text.split(rx).map((part, i) => (i % 2 ? <mark key={i}>{part}</mark> : <Fragment key={i}>{part}</Fragment>))}
+    </>
   );
 }
 

@@ -102,3 +102,17 @@ input {
 .confidence-medium { border-color: #b45309; color: #b45309; }
 .confidence-low { border-color: var(--error); color: var(--error); }
 @media (prefers-color-scheme: dark) { .confidence-medium { border-color: #fbbf24; color: #fbbf24; } }
+
+input[type="search"] { font-size: 1.05rem; padding: 12px; }
+.results { margin-top: 12px; }
+.hits { list-style: none; margin: 0; padding: 0; }
+.hit { padding: 12px 14px; margin: 0 0 10px; }
+.hit-head {
+  display: flex; gap: 10px; align-items: baseline; width: 100%; margin: 0; padding: 0;
+  background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.hit-ref { flex: none; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+.hit-title { font-weight: 600; }
+.hit-text { margin: 6px 0 4px; font-size: 0.93rem; line-height: 1.45; }
+.hit-meta { margin: 0; font-size: 0.8rem; }
+mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: inherit; border-radius: 2px; padding: 0 1px; }

@@ -30,7 +30,7 @@ export default function Home() {
     <main>
       <header>
         <h1>Rules Ref</h1>
-        <p>Describe a situation from your game. You get the matching common calls (both sides of the argument and a best call) and the official rules they come from.</p>
+        <p>Look up the official rules fast. Type a word or a rule number; rule headings come first.</p>
       </header>
       <Ask sports={sportOptions()} defaultSport={DEFAULT_SPORT} basePath={process.env.NEXT_PUBLIC_BASE_PATH ?? ""} />
       <footer>

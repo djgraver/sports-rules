@@ -2,11 +2,13 @@
 
 Plain-language answers to rules questions for amateur sport in Australia, grounded in the official rulebooks.
 
-Describe a situation from your game and you get:
+A fast rule lookup. Type a word or a rule number and results appear as you type:
 
-- the matching **common calls**: a pre-written library of grey-area situations (58 across 7 sports, weighted to inline hockey), each with the rules that apply, any official precedent, both readings where there's a real argument, and a best call with a confidence level,
-- the matching rules from the official rulebook, with their numbers and a link to the page in the PDF,
-- optionally, a written AI answer for anything the library doesn't cover (needs the user's own paid Anthropic API key; off by default).
+- rule **headings** that contain every word come first, then headings with most of the words, then rules whose **text** mentions them,
+- a rule number (`6.4.20`, `Law 12`, `Art. 25`) jumps straight to that rule,
+- each result shows the matching words highlighted and links to the page in the official PDF.
+
+There's also a browsable list of **common calls**: pre-written grey-area situations with the rules that apply, both readings and a best call. An optional written AI answer is available with the user's own paid Anthropic API key.
 
 Everything except the optional AI answer runs in the browser with no account or key.
 
