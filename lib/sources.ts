@@ -136,7 +136,7 @@ export const SPORTS: Sport[] = [
   {
     id: "inline-hockey",
     name: "Inline hockey",
-    governingBodies: "World Skate Inline Hockey Rulebook, used by Skate Australia",
+    governingBodies: "Inline Hockey Australia Rulebook (Skate Australia), with the World Skate rulebook it's adapted from",
     docs: [
       {
         name: "World Skate Inline Hockey Rulebook 2027",
@@ -147,6 +147,20 @@ export const SPORTS: Sport[] = [
           section: /^(\d{1,2}\.\d{1,2}(?:\.\d{1,2})?)\.?\s+([A-Z].{2,80})$/,
           implicitRules: true,
           footer: /^RULEBOOKINLINEHOCKEY|^WORLDSKATE$/i,
+          refPrefix: "World Skate",
+        },
+      },
+      // Australia's own rulebook, adapted from World Skate's with ambiguous rules reworded and
+      // Australia-only rules boxed. Listed second so stored raw/inline-hockey-0.pdf stays World Skate.
+      {
+        name: "Inline Hockey Australia Rulebook 2021",
+        kind: "rules",
+        urls: ["https://www.skateaustralia.org.au/_files/ugd/0a3a54_680c6ed0c9d9498886b18599fdb5714c.pdf"],
+        officialPage: "https://www.skateaustralia.org.au/inline-hockey",
+        headings: {
+          section: /^(\d{1,2}\.\d{1,2}(?:\.\d{1,2})?)\.?\s+([A-Z].{2,80})$/,
+          implicitRules: true,
+          footer: /^INLINEHOCKEYAUSTRALIA/i,
           refPrefix: "Rule",
         },
       },
